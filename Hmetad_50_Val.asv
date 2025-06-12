@@ -1,0 +1,112 @@
+mcmc_params.response_conditional = 0; % Do we want to fit response-conditional meta-d'?
+mcmc_params.nchains = 4; % How Many Chains?
+mcmc_params.nburnin = 1000; % How Many Burn-in Samples?
+mcmc_params.nsamples = 11000;  %How Many Recorded Samples?
+mcmc_params.nthin = 1; % How Often is a Sample Recorded?
+mcmc_params.doparallel = 0; % Parallel Option
+mcmc_params.dic = 1;  % Save DIC
+
+% Dependent groups (Neg/Neut) Hierarchical Meta-d'
+% Load and Clean Data
+nR_S1_1 = load('/Users/jcast/Library/Mobile Documents/com~apple~CloudDocs/Desktop/Gaston/nR_S1_50_1.mat')
+nR_S1_1 = nR_S1_1(1).x
+nR_S1_1 = mat2cell(nR_S1_1,ones(1,50),[6,6])
+nR_S1_1 = num2cell(nR_S1_1, 1)
+nR_S1_1 = cell2struct(nR_S1_1, 'counts', 1)
+
+nR_S2_1 = load('/Users/jcast/Library/Mobile Documents/com~apple~CloudDocs/Desktop/Gaston/nR_S2_50_2.mat')
+nR_S2_1 = nR_S2_1(1).x
+nR_S2_1 = mat2cell(nR_S2_1,ones(1,50),[6,6])
+nR_S2_1 = num2cell(nR_S2_1, 1)
+nR_S2_1 = cell2struct(nR_S2_1, 'counts', 1)
+
+% Run Dependent groups model of Hierarchical Meta-d'
+hierarchical_metamem_Val = fit_meta_d_mcmc_groupCorr(nR_S1_1, nR_S2_1, mcmc_params)
+
+% Evaluate MCMC
+%R hat values (Chain convergence)
+hierarchical_metamem_Val.mcmc.Rhat(1).deviance > 1.1
+hierarchical_metamem_Val.mcmc.Rhat(1).rho > 1.1
+hierarchical_metamem_Val.mcmc.Rhat(1).c1 > 1.1
+hierarchical_metamem_Val.mcmc.Rhat(1).d1 > 1.1
+hierarchical_metamem_Val.mcmc.Rhat(1).Mratio > 1.1
+
+%MCMC samples (Chain Mixing/No drift)
+plotSamples(hierarchical_metamem_Val.mcmc.samples.rho)
+plotSamples(hierarchical_metamem_Val.mcmc.samples.deviance)
+
+%Deviance
+hierarchical_metamem_Val.mcmc.dic %3.17 x 10 ^ 3
+
+
+% ANALYSIS
+% Compute HDI of difference in log-ratio
+sampleDiff = exp(hierarchical_metamem_Val.mcmc.samples.mu_logMratio(:,:,1)) - exp(hierarchical_metamem_Val.mcmc.samples.mu_logMratio(:,:,2));
+hdi = calc_HDI(sampleDiff(:), .89);
+fprintf(('\n Mratio session values = %.2f and %.2f'), exp(hierarchical_metamem_Val.mu_logMratio(1)), exp(hierarchical_metamem_Val.mu_logMratio(2))); %0.56 [Neg], 0.84 [Neut]
+fprintf(['\n Estimated difference in Mratio between sessions: ', num2str(exp(hierarchical_metamem_Val.mu_logMratio(1)) - exp(hierarchical_metamem_Val.mu_logMratio(2)))]) % -0.29
+fprintf(['\n HDI on difference in log(Mratio): ', num2str(hdi) '\n\n']) %-0.66, 0.03
+
+%Plot HDI difference in log-ratio units
+plotSamples(sampleDiff)
+
+%Calculate Correlation
+disp("rho")
+hierarchical_metamem_Val.rho %-0.16
+
+% d'
+disp("d1_Neg")
+median(hierarchical_metamem_Val.d1(:,1)) %Average d'; (0.32)
+disp("HDI_d1_Neg")
+calc_HDI(hierarchical_metamem_Val.d1(:,1), .89) % -0.34; 0.81
+disp("CI_d1_Neg")
+calc_CI(hierarchical_metamem_Val.d1(:,1)) % -0.37; 1.11
+prctile(hierarchical_metamem_Val.d1(:,1), [5.5, 94.5]) %89% CrI (-0.29, 0.9)
+
+disp("d1_Neut")
+median(hierarchical_metamem_Val.d1(:,2)) %Average d'; (0.52)
+disp("HDI_d1_Neut")
+calc_HDI(hierarchical_metamem_Val.d1(:,2), .89) % -0.076; 1.3
+disp("CI_d1_Neut")
+calc_CI(hierarchical_metamem_Val.d1(:,2)) % -0.35; 1.4
+prctile(hierarchical_metamem_Val.d1(:,2), [5.5, 94.5]) %89% CrI (-0.23, 1.24)
+
+% c (bias)
+disp("c1_Neg")
+median(hierarchical_metamem_Val.c1(:,1)) %Average c'; (0.085) conservative responds 'yes' less than an ideal observer would
+disp("HDI_c1_Neg")
+calc_HDI(hierarchical_metamem_Val.c1(:,1), .89) % -0.11; 0.27
+disp("CI_c1_Neg")
+calc_CI(hierarchical_metamem_Val.c1(:,1)) % -0.25; 0.27
+
+disp("c1_Neut")
+median(hierarchical_metamem_Val.c1(:,2)) %Average c'; (-.048) conservative bias responds yes less than an ideal observer would
+disp("HDI_c1_Neut")
+calc_HDI(hierarchical_metamem_Val.c1(:,2), .89) % -0.23; 0.17
+disp("CI_c1_Neut")
+calc_CI(hierarchical_metamem_Val.c1(:,2)) % -0.31; 0.17
+Val_CI_diff =hierarchical_metamem_Val.mcmc.samples.c1(:,:,1) - hierarchical_metamem_Val.mcmc.samples.c1(:,:,2)
+hdi_C1diff = calc_HDI(Val_CI_diff(:)) %-0.045
+
+%M ratio
+disp("Mratio_Neg")
+median(hierarchical_metamem_Val.Mratio(:,1)) %Average meta-d'/d'; (0.62)
+std(hierarchical_metamem_Val.Mratio(:,1)) %0.071
+calc_HDI(hierarchical_metamem_Val.Mratio(:,1), .89) % 0.53; 0.72
+prctile(hierarchical_metamem_Val.Mratio(:,1), [5.5, 94.5]) %89% CrI (0.53, 0.72)
+
+
+disp("Mratio_Neut")
+median(hierarchical_metamem_Val.Mratio(:,2)) %Average meta-d'/d'; (0.88)
+std(hierarchical_metamem_Val.Mratio(:,2)) % 0.04
+calc_HDI(hierarchical_metamem_Val.Mratio(:,2)) % 0.48; 0.67
+prctile(hierarchical_metamem_Val.Mratio(:,2), [5.5, 94.5]) %89% CrI (-0.81, -0.09)
+
+
+sampleDiff = exp(hierarchical_metamem_Val.mcmc.samples.mu_logMratio(:,:,1)) - exp(hierarchical_metamem_Val.mcmc.samples.mu_logMratio(:,:,2)) 
+median(sampleDiff(:)) %Average meta-d'/d'; (0.14 // 0.089)
+std(sampleDiff(:)) % 0.14
+hdi = calc_HDI(sampleDiff(:))%-0.14, 0.2
+
+
+
